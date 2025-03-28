@@ -1,0 +1,51 @@
+# Go
+# Ignorer les fichiers générés par Go
+*.exe
+*.test
+*.out
+bin/
+pkg/
+
+# Les fichiers de modules Go
+/go.sum
+/go.mod
+
+# Les fichiers générés par l'outil de gestion de dépendances
+vendor/
+
+# Fichiers de configuration de l'IDE
+.idea/
+.vscode/
+
+# Les fichiers de log
+*.log
+
+# Dossier de cache de Go
+/cmd/
+/internal/
+
+# Docker
+docker-compose.override.yml
+.docker/
+
+# Fichiers temporaires et de sauvegarde
+*.swp
+*~
+
+# .env pour les variables d'environnement sensibles
+.env
+
+# Fichiers de migration de base de données (si tu les gères avec un outil localement)
+migrations/
+
+# Supprimer les fichiers de base de données temporaires
+*.db
+*.sql
+*.sqlite
+
+# Fichiers de session ou de cache de l'application
+tmp/
+
+# Fichiers générés par le système d'exploitation
+.DS_Store
+Thumbs.db
