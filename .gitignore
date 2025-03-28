@@ -20,9 +20,9 @@ vendor/
 # Les fichiers de log
 *.log
 
-# Dossier de cache de Go
-/cmd/
-/internal/
+# # Dossier de cache de Go
+# /cmd/
+# /internal/
 
 # Docker
 docker-compose.override.yml
