@@ -19,7 +19,7 @@ func InitDB() {
 		log.Fatal("Erreur lors du chargement du fichier .env")
 	}
 
-	dsn := os.Getenv("DB_URL_PROD")
+	dsn := os.Getenv("DB_URL_NEON")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Erreur de connexion à la base de données :", err)
@@ -29,5 +29,5 @@ func InitDB() {
 	fmt.Println("✅ Connecté à PostgreSQL")
 
 	// Auto-migration des modèles
-	db.AutoMigrate(&models.User{})
+	db.AutoMigrate(&models.User{}, &models.Subscription{}, &models.Comment{}, &models.Insight{}, &models.Notification{})
 }
