@@ -15,14 +15,17 @@ func main() {
 	config.InitDB()
 
 	userRepo := repositories.NewUserRepository(config.DB)
-
+	commentRepo := repositories.NewCommentRepository(config.DB)
 	// Initialize services
-	allServices := services.NewAllServices(userRepo)
+	allServices := services.NewAllServices(userRepo, commentRepo)
 	
 	userHandler := handlers.NewUserHandler(allServices.UserService)
+	commentHandler := handlers.NewCommentHandler(allServices.CommentService)
 
 	app := fiber.New()
+	
 	routes.SetupUserRoutes(app, userHandler)
+	routes.SetupCommentsRoutes(app, commentHandler)
 
 	log.Fatal(app.Listen(":3001"))
 }
