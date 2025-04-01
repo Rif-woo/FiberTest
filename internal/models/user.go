@@ -12,7 +12,7 @@ type User struct {
 	Username  string    `gorm:"type:varchar(50);unique;not null"`
 	Email     string    `gorm:"type:varchar(100);unique;not null"`
 	Password  string    `gorm:"type:text;not null"`
-	Role      string    `gorm:"type:user_role;default:'user';not null"` 
+	Role      string    `gorm:"type:user_role;default:'user';not null"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
