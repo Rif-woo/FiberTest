@@ -6,6 +6,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
+	github.com/sashabaranov/go-openai v1.38.1
 	google.golang.org/api v0.228.0
 	gorm.io/datatypes v1.2.5
 	gorm.io/driver/postgres v1.5.11

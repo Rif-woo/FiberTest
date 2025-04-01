@@ -2,13 +2,16 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/Azertdev/FiberTest/internal/models"
 	"github.com/Azertdev/FiberTest/internal/repositories"
+	"github.com/Azertdev/FiberTest/internal/utils"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
 )
@@ -17,6 +20,7 @@ type CommentService interface {
 	FindAll() ([]models.Comment, error)
 	FindByID(id uint) (*models.Comment, error)
 	GetYouTubeComments(videoID string) ([]models.Comment, error)
+	AnalyzeYouTubeComments(videoID string) (string, error)
 }
 
 type commentService struct {
@@ -74,6 +78,49 @@ func (s *commentService) GetYouTubeComments(videoID string) ([]models.Comment, e
 
 	// store comments in database
 	// s.commentRepo.SaveYouTubeComments(comments)
-	
+
 	return comments, nil
+}
+
+
+func (s *commentService) AnalyzeYouTubeComments(videoID string) (string, error) {
+	comments, err := s.GetYouTubeComments(videoID)
+	if err != nil {
+		return "", err
+	}
+
+	var contents []string
+	for _, c := range comments {
+		contents = append(contents, fmt.Sprintf(
+		"Auteur : %s | Date : %s | Commentaire : \"%s\"",
+		c.Author,
+		c.Date.Format("2006-01-02"),
+		c.Content,
+	))
+	}
+
+	apiKey := os.Getenv("GROQ_API_KEY")
+	if apiKey == "" {
+		return "", errors.New("GROQ_API_KEY is not set")
+	}
+
+	// Appel de OpenAI ici
+	ai := NewGroqService(apiKey) // ou injecté dans all_services.go
+	videoTranscript, err := utils.GetTranscript(videoID)
+	if err != nil {
+		return "", err
+	}
+	result, err := ai.AnalyzeComments(contents, videoTranscript)
+	if err != nil {
+		return "", err
+	}
+
+	parsed := utils.ParseInsightResponse(result)
+	jsonBytes, err := json.Marshal(parsed)
+	if err != nil {
+		return "", err
+	}
+
+
+	return string(jsonBytes), nil
 }

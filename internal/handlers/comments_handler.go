@@ -19,11 +19,11 @@ func (h *CommentHandler) GetComments(c *fiber.Ctx) error {
 	if videoID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Video ID is required"})
 	}
-	comments, err := h.commentService.GetYouTubeComments(videoID)
+	comments, err := h.commentService.AnalyzeYouTubeComments(videoID)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": err})
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
-	return c.Status(200).JSON(comments)
+	return c.Status(200).JSON(fiber.Map{"insights": comments})
 }
 
 
