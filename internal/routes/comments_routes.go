@@ -2,7 +2,6 @@ package routes
 
 import (
 	"github.com/Azertdev/FiberTest/internal/handlers"
-
 	"github.com/gofiber/fiber/v2"
 )
 

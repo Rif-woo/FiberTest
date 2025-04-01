@@ -10,8 +10,8 @@ type CommentHandler struct {
 	commentService services.CommentService
 }
 
-func NewCommentHandler(commentService services.CommentService) *CommentHandler {
-	return &CommentHandler{commentService}
+func NewCommentHandler(commentService services.CommentService) CommentHandler {
+	return CommentHandler{commentService}
 }
 
 func (h *CommentHandler) GetComments(c *fiber.Ctx) error {

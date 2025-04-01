@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+
 	"github.com/Azertdev/FiberTest/config"
 	"github.com/Azertdev/FiberTest/internal/handlers"
 	"github.com/Azertdev/FiberTest/internal/repositories"
@@ -14,18 +15,14 @@ import (
 func main() {
 	config.InitDB()
 
-	userRepo := repositories.NewUserRepository(config.DB)
-	commentRepo := repositories.NewCommentRepository(config.DB)
-	// Initialize services
-	allServices := services.NewAllServices(userRepo, commentRepo)
-	
-	userHandler := handlers.NewUserHandler(allServices.UserService)
-	commentHandler := handlers.NewCommentHandler(allServices.CommentService)
+	allRepositories := repositories.NewAllRepository(config.DB)
+	allServices := services.NewAllServices(allRepositories)
+	allHandlers := handlers.NewAllHandlers(allServices.UserService, *allServices.CommentService)
 
 	app := fiber.New()
 	
-	routes.SetupUserRoutes(app, userHandler)
-	routes.SetupCommentsRoutes(app, commentHandler)
+	routes.SetupUserRoutes(app, &allHandlers.UserHandler)
+	routes.SetupCommentsRoutes(app, &allHandlers.CommentHandler)
 
 	log.Fatal(app.Listen(":3001"))
 }

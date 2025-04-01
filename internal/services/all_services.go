@@ -5,15 +5,15 @@ import (
 )
 
 type AllServices struct {
-	UserService    UserService
-	CommentService CommentService
+	UserService    *userService
+	CommentService *CommentService
 	// D'autres services ici
 }
 
-func NewAllServices(userRepo repositories.UserRepository, CommentRepo repositories.CommentRepository) *AllServices {
+func NewAllServices(allRepositories *repositories.AllRepository) *AllServices {
 	return &AllServices{
-		UserService:    NewUserService(userRepo),
-		CommentService: NewCommentService(CommentRepo),
+		UserService:    NewUserService(allRepositories.UserRepository),
+		CommentService: NewCommentService(allRepositories.CommentRepository),
 		// Initialiser d'autres services ici
 	}
 }

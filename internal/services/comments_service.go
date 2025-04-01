@@ -13,29 +13,24 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-type CommentService interface {
-	FindAll() ([]models.Comment, error)
-	FindByID(id uint) (*models.Comment, error)
-	GetYouTubeComments(videoID string) ([]models.Comment, error)
-}
 
-type commentService struct {
+type CommentService struct {
 	commentRepo repositories.CommentRepository
 }
 
-func NewCommentService(commentRepo repositories.CommentRepository) CommentService {
-	return &commentService{commentRepo}
+func NewCommentService(commentRepo repositories.CommentRepository) *CommentService {
+	return &CommentService{commentRepo}
 }
 
-func (s *commentService) FindAll() ([]models.Comment, error) {
-	return s.commentRepo.FindAll()
+func (s *CommentService) FindAll() ([]models.Comment, error) {
+	return s.commentRepo.FindAllComment()
 }
 
-func (s *commentService) FindByID(id uint) (*models.Comment, error) {
-	return s.commentRepo.FindByID(id)
+func (s *CommentService) FindByID(id uint) (*models.Comment, error) {
+	return s.commentRepo.FindCommentByID(id)
 }
 
-func (s *commentService) GetYouTubeComments(videoID string) ([]models.Comment, error) {
+func (s *CommentService) GetYouTubeComments(videoID string) ([]models.Comment, error) {
 	apiKey := os.Getenv("YOUTUBE_API_KEY")
 	if apiKey == "" {
 		return nil, errors.New("YOUTUBE_API_KEY is not set")

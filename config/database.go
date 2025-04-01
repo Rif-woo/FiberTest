@@ -19,7 +19,7 @@ func InitDB() {
 		log.Fatal("Erreur lors du chargement du fichier .env")
 	}
 
-	dsn := os.Getenv("DB_URL_NEON")
+	dsn := os.Getenv("DB_URL_RAILWAY")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Erreur de connexion à la base de données :", err)

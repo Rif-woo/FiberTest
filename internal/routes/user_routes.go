@@ -11,4 +11,5 @@ func SetupUserRoutes(app *fiber.App, userHandler *handlers.UserHandler) {
 	userGroup.Post("/", userHandler.CreateUser)
 	userGroup.Get("/", userHandler.GetAllUsers)
 	userGroup.Get("/:id", userHandler.GetUserByID)
+	userGroup.Post("/authenticate", userHandler.LoginHandler)
 }
