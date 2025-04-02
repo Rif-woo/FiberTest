@@ -11,8 +11,8 @@ type UserHandler struct {
 	userService services.UserService
 }
 
-func NewUserHandler(userService services.UserService) *UserHandler {
-	return &UserHandler{userService}
+func NewUserHandler(userService services.UserService) UserHandler {
+	return UserHandler{userService}
 }
 
 // Créer un utilisateur
@@ -48,4 +48,21 @@ func (h *UserHandler) GetUserByID(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "Utilisateur non trouvé"})
 	}
 	return c.JSON(user)
+}
+
+func (h *UserHandler) LoginHandler(c *fiber.Ctx) error {
+	user := new(models.User)
+	if err := c.BodyParser(user); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Données invalides"})
+	}
+	userAuth, err := h.userService.AuthenticateUser(user.Username, user.Password)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Échec de la connexion"})
+	}
+
+	token, err := h.userService.GenerateJWT(userAuth.ID)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Échec de la creation du token"})
+	}
+	return c.JSON(fiber.Map{"token": token})
 }

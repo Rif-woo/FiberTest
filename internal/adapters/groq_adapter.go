@@ -1,43 +1,58 @@
-package services
+package adapters
+
+// internal/adapters/groq_adapter.go
 
 import (
 	"bytes"
-	// "log"
-	// "context"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-
-	// "io/ioutil"
+	"log"
 	"net/http"
-
-	// "os"
 	"strings"
+	"time"
+
+	"github.com/Azertdev/FiberTest/internal/services" // Pour l'interface
 )
 
-type GroqService struct {
+// Structure qui implémente services.GroqAdapter
+type groqAdapter struct {
 	apiKey string
+	client *http.Client // Garde un client HTTP réutilisable
+	model  string       // Nom du modèle Groq à utiliser (ex: "llama3-70b-8192")
 }
 
-func NewGroqService(apiKey string) *GroqService {
-	return &GroqService{apiKey: apiKey}
+// Constructeur pour groqAdapter
+// Prend la clé API et retourne l'INTERFACE services.GroqAdapter
+func NewGroqAdapter(apiKey string) services.GroqAdapter {
+	if apiKey == "" {
+		// Ne pas retourner d'erreur ici, car main.go vérifie déjà.
+		// Si vous voulez une double vérification, retournez (nil, error).
+		log.Println("WARN: Tentative de création de GroqAdapter sans clé API.")
+	}
+	return &groqAdapter{
+		apiKey: apiKey,
+		client: &http.Client{Timeout: 90 * time.Second}, // Timeout configurable
+		model:  "llama3-70b-8192",                 // Modèle par défaut, pourrait être configurable
+	}
 }
 
-func (gs *GroqService) AnalyzeComments(comments []string, videoTranscript string) (string, error) { // Ajout de context.Context
+// Implémentation de la méthode AnalyzeComments de l'interface
+func (ga *groqAdapter) AnalyzeComments(ctx context.Context, comments []string, videoTranscript string) (string, error) {
+	if ga.apiKey == "" {
+		return "", errors.New("GroqAdapter non configuré avec une clé API")
+	}
 	if len(comments) == 0 {
-		return "", fmt.Errorf("aucun commentaire fourni pour l'analyse")
+		return "", errors.New("aucun commentaire fourni pour l'analyse Groq")
 	}
 
-	// Préparer la liste des commentaires pour le prompt
-	// Assure-toi que chaque élément de `comments` est bien formaté, ex: "AuteurXYZ: Le commentaire ici"
+	// --- Construction du Prompt (copié/adapté depuis l'ancienne logique) ---
 	commentsFormatted := strings.Join(comments, "\n- ")
-	// Tronquer la transcription si nécessaire (logique à ajouter si pas déjà faite avant)
-	// maxTranscriptLength := 3000 // Exemple, en caractères ou mots
-	// if len(videoTranscript) > maxTranscriptLength {
-	// 	 videoTranscript = videoTranscript[:maxTranscriptLength] + "..." // Simple troncature
-	// }
+	// Tronquer la transcription si nécessaire (la logique de troncature pourrait être dans le service avant l'appel à l'adapter)
+	// if len(videoTranscript) > 4000 { videoTranscript = videoTranscript[:4000] + "..." }
 
-	// -- PROMPT AMÉLIORÉ --
 	prompt := fmt.Sprintf(`
 # RÔLE ET OBJECTIF
 Tu es un analyste expert spécialisé dans l'analyse des retours de communauté sur YouTube. Ton objectif est d'extraire des informations clés et structurées à partir des commentaires d'une vidéo, en utilisant la transcription fournie comme contexte général.
@@ -92,53 +107,52 @@ Liste les 5 à 10 mots-clés ou courtes expressions (1-3 mots) les plus fréquen
 - Ne modifie JAMAIS le texte des commentaires cités dans les sections 3, 4, 5, 6.
 - Base les sections 3 à 7 EXCLUSIVEMENT sur le contenu des commentaires fournis.
 - Sois objectif et concis.
-`, videoTranscript, commentsFormatted) // Utiliser commentsFormatted
-
-	// -- FIN DU PROMPT AMÉLIORÉ --
+`, videoTranscript, commentsFormatted) 
+	// --- Fin du Prompt ---
 
 	payload := map[string]any{
-		"model": "llama3-70b-8192", // Tu peux aussi tester llama3-8b-8192 pour voir si c'est suffisant et moins cher/rapide
+		"model": ga.model, // Utilise le modèle configuré
 		"messages": []map[string]string{
-			// Optionnel mais recommandé: Utiliser un message "system" pour le rôle/objectif global
-			// {
-			//  "role": "system",
-			//  "content": "Tu es un analyste expert spécialisé dans l'analyse des retours de communauté sur YouTube. Tu dois suivre précisément les instructions de formatage.",
-			// },
-			{
-				"role":    "user",
-				"content": prompt,
-			},
+			{"role": "user", "content": prompt},
 		},
-		"temperature": 0.5,  // Légèrement plus déterministe mais créatif
-		"max_tokens":  2048, // Ajuste selon la longueur attendue de la réponse
+		"temperature": 0.5, // Configurable si besoin
+		"max_tokens":  2048, // Configurable si besoin
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("erreur lors du marshalling du payload Groq: %w", err) // Mieux gérer l'erreur
+		return "", fmt.Errorf("erreur lors du marshalling du payload Groq: %w", err)
 	}
 
-	// Utiliser un client HTTP configurable (bonne pratique)
-	// client := &http.Client{Timeout: 60 * time.Second} // Exemple
-	// req, err := http.NewRequestWithContext(ctx, "POST", "https://api.groq.com/openai/v1/chat/completions", bytes.NewBuffer(body))
-	req, err := http.NewRequest("POST", "https://api.groq.com/openai/v1/chat/completions", bytes.NewBuffer(body)) // Simple pour l'instant
+	// Création de la requête avec le contexte
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.groq.com/openai/v1/chat/completions", bytes.NewBuffer(body))
 	if err != nil {
 		return "", fmt.Errorf("erreur lors de la création de la requête Groq: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+gs.apiKey)
+	req.Header.Set("Authorization", "Bearer "+ga.apiKey) // Utilise la clé API stockée
 
-	// resp, err := client.Do(req)
-	resp, err := http.DefaultClient.Do(req) // Utilise le client par défaut pour l'instant
+	// Exécution de la requête via le client HTTP stocké
+	resp, err := ga.client.Do(req)
 	if err != nil {
-		// TODO: Vérifier ctx.Err() si le contexte est annulé
+		// Vérifier si l'erreur est due à l'annulation du contexte
+		if errors.Is(err, context.Canceled) {
+			return "", errors.New("appel à l'API Groq annulé")
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", errors.New("timeout lors de l'appel à l'API Groq")
+		}
 		return "", fmt.Errorf("erreur lors de l'appel API Groq: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK { // Utiliser http.StatusOK
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("erreur API Groq (%d): %s", resp.StatusCode, string(bodyBytes))
+	respBodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("erreur lors de la lecture de la réponse Groq: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("erreur API Groq (%d): %s", resp.StatusCode, string(respBodyBytes))
 	}
 
 	var groqResponse struct {
@@ -147,26 +161,26 @@ Liste les 5 à 10 mots-clés ou courtes expressions (1-3 mots) les plus fréquen
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
-		Usage struct { // Potentiellement utile pour le logging/monitoring
+		Usage struct {
 			PromptTokens     int `json:"prompt_tokens"`
 			CompletionTokens int `json:"completion_tokens"`
 			TotalTokens      int `json:"total_tokens"`
 		} `json:"usage"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&groqResponse); err != nil {
+	if err := json.Unmarshal(respBodyBytes, &groqResponse); err != nil {
+		// Logguer la réponse brute peut aider au débogage si le JSON est invalide
+		// log.Printf("DEBUG: Réponse Groq invalide: %s", string(respBodyBytes))
 		return "", fmt.Errorf("erreur lors du décodage de la réponse Groq: %w", err)
 	}
 
-	if len(groqResponse.Choices) == 0 {
-		return "", fmt.Errorf("aucune réponse reçue de Groq")
+	if len(groqResponse.Choices) == 0 || groqResponse.Choices[0].Message.Content == "" {
+		// log.Printf("DEBUG: Réponse Groq vide reçue: %+v", groqResponse)
+		return "", errors.New("aucune réponse ('content') reçue de Groq")
 	}
 
-	// Ici, tu reçois la réponse brute en Markdown formatée comme demandé.
-	// La prochaine étape serait de parser cette réponse Markdown dans ta struct Go `Insight`.
-	// Cela pourrait se faire dans le service appelant ou ici (moins idéal pour SRP).
-	responseContent := groqResponse.Choices[0].Message.Content
-	// log.Printf("DEBUG: GroqService: Réponse reçue de Groq:\n---\n%s\n---\n", responseContent) // Log crucial
-	return responseContent, nil
+	// Logguer l'usage peut être utile pour le suivi des coûts/limites
+	// log.Printf("DEBUG: Usage Groq: %+v", groqResponse.Usage)
 
+	return groqResponse.Choices[0].Message.Content, nil
 }
