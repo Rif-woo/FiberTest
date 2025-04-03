@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/Azertdev/FiberTest/internal/models"
-	"github.com/Azertdev/FiberTest/internal/services"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
-	// Import googleapi si vous utilisez des CallOption spécifiques, sinon pas nécessaire ici.
-	// "google.golang.org/api/googleapi"
 )
+
+type YouTubeAdapter interface {
+	GetComments(ctx context.Context, videoID string, maxResults int64) ([]models.Comment, error) // Return models.Comment for simplicity now
+}
 
 // ... (Structure youtubeAdapter et constructeur NewYouTubeAdapter restent les mêmes) ...
 type youtubeAdapter struct {
@@ -22,21 +23,23 @@ type youtubeAdapter struct {
 	ytService   *youtube.Service
 }
 
-func NewYouTubeAdapter(apiKey string) (services.YouTubeAdapter, error) {
+func NewYouTubeAdapter(apiKey string) (YouTubeAdapter) {
     // ... (code du constructeur identique) ...
 	if apiKey == "" {
-		return nil, errors.New("clé API YouTube manquante pour l'adapter")
+		fmt.Println("clé API YouTube manquante pour l'adapter")
+		return nil
 	}
 	ctx := context.Background()
 	ytService, err := youtube.NewService(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
-		return nil, fmt.Errorf("échec de la création du service YouTube: %w", err)
+		fmt.Println("échec de la création du service YouTube: %w", err)
+		return nil
 	}
 	log.Println("Service YouTube initialisé avec succès dans l'adapter.")
 	return &youtubeAdapter{
 		apiKey:    apiKey,
 		ytService: ytService,
-	}, nil
+	}
 }
 
 

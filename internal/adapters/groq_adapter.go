@@ -14,8 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azertdev/FiberTest/internal/services" // Pour l'interface
 )
+
+type GroqAdapter interface {
+	AnalyzeComments(ctx context.Context, comments []string, videoTranscript string) (string, error)
+}
 
 // Structure qui implémente services.GroqAdapter
 type groqAdapter struct {
@@ -26,7 +29,7 @@ type groqAdapter struct {
 
 // Constructeur pour groqAdapter
 // Prend la clé API et retourne l'INTERFACE services.GroqAdapter
-func NewGroqAdapter(apiKey string) services.GroqAdapter {
+func NewGroqAdapter(apiKey string) GroqAdapter {
 	if apiKey == "" {
 		// Ne pas retourner d'erreur ici, car main.go vérifie déjà.
 		// Si vous voulez une double vérification, retournez (nil, error).

@@ -15,24 +15,15 @@ import (
 	"github.com/Azertdev/FiberTest/internal/models"
 	"github.com/Azertdev/FiberTest/internal/repositories"
 	"github.com/Azertdev/FiberTest/internal/utils"
-	// Les imports directs de google.golang.org/api ne sont plus nécessaires ici
-	// si gérés par les adapters.
+	
 )
 
-// --- Utilisation des interfaces définies dans interfaces.go ---
-
-// CommentService définit les opérations du service de commentaires.
-// J'ai nettoyé l'interface pour refléter la nouvelle méthode principale.
 type CommentService interface {
-	// FindAll et FindByID sont conservés s'ils sont utilisés ailleurs.
 	FindAll() ([]models.Comment, error)
 	FindByID(id uint) (*models.Comment, error)
-	// La méthode principale pour l'analyse et la sauvegarde.
 	AnalyzeAndSaveYouTubeComments(ctx context.Context, userID uuid.UUID, videoID string) (*models.Insight, error)
 }
 
-// commentService implémente l'interface CommentService.
-// Elle contient maintenant les dépendances injectées.
 type commentService struct {
 	commentRepo    repositories.CommentRepository // Conservé si FindAll/FindByID sont utilisés
 	insightRepo    repositories.InsightRepository  // Injection du repo Insight

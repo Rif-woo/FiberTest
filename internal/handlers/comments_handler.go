@@ -17,8 +17,8 @@ type CommentHandler struct {
 	commentService services.CommentService
 }
 
-func NewCommentHandler(commentService services.CommentService) *CommentHandler {
-	return &CommentHandler{commentService}
+func NewCommentHandler(commentService services.CommentService) CommentHandler {
+	return CommentHandler{commentService}
 }
 
 // Renommer la fonction est une bonne pratique pour refléter l'action (Analyse)
