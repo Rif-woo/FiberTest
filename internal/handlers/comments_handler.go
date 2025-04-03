@@ -40,7 +40,7 @@ func (h *CommentHandler) GetComments(c *fiber.Ctx) error { // Gardons votre nom 
 	var finalUserID uuid.UUID // Variable pour l'UUID à utiliser
 
 	// Tenter de récupérer depuis les locals (pour le futur quand l'auth sera là)
-	userIDClaim := c.Locals("userID")
+	userIDClaim := c.Locals("userId")
 	if userIDClaim != nil {
 		var ok bool
 		finalUserID, ok = userIDClaim.(uuid.UUID)
@@ -52,13 +52,14 @@ func (h *CommentHandler) GetComments(c *fiber.Ctx) error { // Gardons votre nom 
 			})
 		}
 		log.Printf("INFO: Utilisation de userID %s depuis c.Locals", finalUserID)
-	} else {
-		// Cas actuel : Pas d'authentification, générer un UUID temporaire
-		finalUserID = uuid.New() // Génère un UUID v4 aléatoire
-		log.Printf("WARN: Aucun userID dans c.Locals. Génération d'un UUID temporaire: %s", finalUserID)
-		// Note : Quand l'auth sera obligatoire, retourner 401 ici au lieu de générer.
 	}
-	// --- FIN CORRECTION ---
+	// } else {
+	// 	// Cas actuel : Pas d'authentification, générer un UUID temporaire
+	// 	finalUserID = uuid.New() // Génère un UUID v4 aléatoire
+	// 	log.Printf("WARN: Aucun userID dans c.Locals. Génération d'un UUID temporaire: %s", finalUserID)
+	// 	// Note : Quand l'auth sera obligatoire, retourner 401 ici au lieu de générer.
+	// }
+	// // --- FIN CORRECTION ---
 
 
 	// Appel du service avec le finalUserID (qui est maintenant un uuid.UUID)

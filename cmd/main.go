@@ -11,6 +11,7 @@ import (
 	"github.com/Azertdev/FiberTest/internal/repositories"
 	"github.com/Azertdev/FiberTest/internal/routes"
 	"github.com/Azertdev/FiberTest/internal/services"
+	"github.com/gofiber/helmet/v2"
 
 	// Assurez-vous que le chemin vers vos utils (pour TranscriptUtil) est correct
 	"github.com/Azertdev/FiberTest/internal/utils"
@@ -64,7 +65,7 @@ func main() {
 	// Ajout de middlewares utiles
 	app.Use(cors.New())   // Autoriser les requêtes Cross-Origin (configurez selon vos besoins)
 	app.Use(logger.New()) // Logger les requêtes HTTP
-
+	app.Use(helmet.New())
 	// Création d'un groupe pour les routes API (bonne pratique)
 	routes.SetupUserRoutes(app, allHandlers.UserHandler)
 	routes.SetupCommentsRoutes(app, allHandlers.CommentHandler)
