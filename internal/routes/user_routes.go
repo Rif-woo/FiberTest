@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func SetupUserRoutes(app *fiber.App, userHandler *handlers.UserHandler) {
+func SetupUserRoutes(app *fiber.App, userHandler handlers.UserHandler) {
 	userGroup := app.Group("/users")
 	userGroup.Post("/", userHandler.CreateUser)
 	userGroup.Get("/", userHandler.GetAllUsers)

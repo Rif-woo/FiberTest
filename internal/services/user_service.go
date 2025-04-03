@@ -51,7 +51,7 @@ func (s *userService) AuthenticateUser(username, password string) (*models.User,
 func (s *userService) GenerateJWT(userID uuid.UUID) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
-		"exp":     time.Now().Add(time.Hour * 1).Unix(), 
+		"exp":     time.Now().Add(time.Hour * 1).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

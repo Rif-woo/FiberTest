@@ -5,7 +5,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func SetupCommentsRoutes(app *fiber.App, commentsHandler *handlers.CommentHandler) {
+func SetupCommentsRoutes(app *fiber.App, commentsHandler handlers.CommentHandler) {
 	commentGroup := app.Group("/comments")
 	commentGroup.Get("/", commentsHandler.GetComments)
 	// userGroup.Get("/", userHandler.GetAllUsers)
