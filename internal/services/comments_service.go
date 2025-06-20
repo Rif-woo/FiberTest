@@ -4,9 +4,12 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"time"
+
 	// "errors" // errors n'est plus utilisé directement ici pour les API Keys
 	"fmt"
 	"log"
+
 	// "time" // Garder l'import time
 
 	"github.com/google/uuid" // Import pour UUID
@@ -15,7 +18,6 @@ import (
 	"github.com/Azertdev/FiberTest/internal/models"
 	"github.com/Azertdev/FiberTest/internal/repositories"
 	"github.com/Azertdev/FiberTest/internal/utils"
-	
 )
 
 type CommentService interface {
@@ -32,10 +34,8 @@ type commentService struct {
 	transcriptUtil TranscriptUtil                  // Injection de l'utilitaire de transcription
 }
 
-// NewCommentService est le constructeur pour commentService.
-// Il prend toutes les dépendances nécessaires.
 func NewCommentService(
-	commentRepo repositories.CommentRepository, // Peut être nil si FindAll/FindByID non utilisés
+	commentRepo repositories.CommentRepository,
 	insightRepo repositories.InsightRepository,
 	youtubeAdapter YouTubeAdapter,
 	groqAdapter GroqAdapter,
@@ -70,127 +70,138 @@ func (s *commentService) FindByID(id uint) (*models.Comment, error) {
 	return s.commentRepo.FindCommentByID(id)
 }
 
-// --- Méthode GetYouTubeComments originale SUPPRIMÉE ---
-// La logique d'appel à l'API YouTube est maintenant dans l'implémentation de YouTubeAdapter.
-
-// --- Méthode AnalyzeYouTubeComments originale (retournant string) SUPPRIMÉE ---
-// Remplacée par AnalyzeAndSaveYouTubeComments ci-dessous.
-
-// --- NOUVELLE MÉTHODE : AnalyzeAndSaveYouTubeComments ---
-
-// AnalyzeAndSaveYouTubeComments orchestre le processus complet :
-// récupération des commentaires, transcription, analyse IA, parsing, et sauvegarde.
 func (s *commentService) AnalyzeAndSaveYouTubeComments(ctx context.Context, userID uuid.UUID, videoID string) (*models.Insight, error) {
-	// 1. Vérifier si un insight existe déjà (Optionnel - décommentez et adaptez si nécessaire)
-	// existingInsight, err := s.insightRepo.GetInsightByVideoID(ctx, userID, videoID)
-	// if err != nil {
-	//     // Ne pas bloquer si la vérification échoue, juste logguer peut-être ? Ou retourner l'erreur.
-	//     log.Printf("WARN: [UserID: %s] Erreur lors de la vérification de l'insight existant pour videoID %s: %v", userID, videoID, err)
-	// }
-	// if existingInsight != nil {
-	//     log.Printf("INFO: [UserID: %s] Insight déjà existant pour videoID %s. Retour de l'existant.", userID, videoID)
-	//     return existingInsight, nil // Retourner l'insight existant si trouvé
-	// }
 
-	// 2. Récupérer les commentaires via l'adapter YouTube
+	// --- Étape 1: Récupération des commentaires ---
 	log.Printf("INFO: [UserID: %s] Récupération des commentaires pour videoID: %s", userID, videoID)
-	maxComments := int64(50) // Rendre configurable si besoin
-	commentsData, err := s.youtubeAdapter.GetComments(ctx, videoID, maxComments)
-	if err != nil {
-		// Erreur critique, on ne peut pas continuer sans commentaires
-		return nil, fmt.Errorf("échec de la récupération des commentaires YouTube pour videoID %s: %w", videoID, err)
-	}
-	if len(commentsData) == 0 {
-		// Gérer le cas sans commentaires : retourner une erreur claire ? ou un insight "vide" ?
-		// Pour l'instant, retourne une erreur.
-		log.Printf("INFO: [UserID: %s] Aucun commentaire trouvé pour videoID %s.", userID, videoID)
-		return nil, fmt.Errorf("aucun commentaire trouvé pour la vidéo %s", videoID) // Erreur spécifique
-	}
+	// Note: Fetching 100 comments increases the chance of needing chunking.
+	maxCommentsToFetch := int64(2000) // Configurable ?
+	commentsData, err := s.youtubeAdapter.GetComments(ctx, videoID, maxCommentsToFetch)
+	if err != nil { return nil, fmt.Errorf("échec récupération commentaires YouTube: %w", err) }
+	if len(commentsData) == 0 { return nil, fmt.Errorf("aucun commentaire trouvé pour videoID %s", videoID) }
 	log.Printf("INFO: [UserID: %s] %d commentaires récupérés pour videoID: %s", userID, len(commentsData), videoID)
 
-	// Formatage des commentaires pour le prompt Groq
-	var commentContents []string
-	for _, c := range commentsData {
-		commentContents = append(commentContents, fmt.Sprintf(
-			"Auteur: %s | Date: %s | Commentaire: \"%s\"", // Format cohérent avec le prompt
-			c.Author,
-			c.Date.Format("2006-01-02"), // Utiliser le champ Date du modèle
-			c.Content,                  // Utiliser le champ Content du modèle
-		))
-	}
 
-	// 3. Récupérer la transcription via l'utilitaire de transcription
-	log.Printf("INFO: [UserID: %s] Récupération de la transcription pour videoID: %s", userID, videoID)
-	videoTranscript, err := s.transcriptUtil.GetTranscript(ctx, videoID)
-	if err != nil {
-		// Non critique : on logue un avertissement mais on continue sans transcription
-		log.Printf("WARN: [UserID: %s] Échec de la récupération de la transcription pour videoID %s: %v. Analyse sans transcription.", userID, videoID, err)
-		videoTranscript = "Transcription non disponible." // Fournir une valeur par défaut
-	} else {
-		log.Printf("INFO: [UserID: %s] Transcription récupérée pour videoID: %s", userID, videoID)
-		// TODO: Ajouter ici la logique pour tronquer videoTranscript si elle est trop longue
-		// maxLength := 4000 // Exemple (en caractères ou tokens, selon Groq)
-		// if len(videoTranscript) > maxLength {
-		//     videoTranscript = videoTranscript[:maxLength] + "..." // Troncature simple
-		//     log.Printf("INFO: [UserID: %s] Transcription tronquée pour videoID: %s", userID, videoID)
-		// }
-	}
+	// --- Étape 2: Récupération et Résumé de la Transcription (Appel IA Séparé) ---
+	log.Printf("INFO: [UserID: %s] Récupération transcription brute pour videoID: %s", userID, videoID)
+	rawTranscript, err := s.transcriptUtil.GetTranscript(ctx, videoID)
+	transcriptSummary := "Résumé non généré (erreur récupération transcript)." // Default
+	// transcriptForAnalysis := "Transcription non disponible."                   // Default context for comment analysis
 
-	// 4. Appeler Groq pour l'analyse via l'adapter Groq
-	log.Printf("INFO: [UserID: %s] Appel de l'analyse Groq pour videoID: %s", userID, videoID)
-	markdownResult, err := s.groqAdapter.AnalyzeComments(ctx, commentContents, videoTranscript)
-	if err != nil {
-		// Erreur critique de l'analyse IA
-		return nil, fmt.Errorf("échec de l'analyse Groq pour videoID %s: %w", videoID, err)
-	}
-	// Décommenter pour déboguer la sortie brute de Groq
-	// log.Printf("DEBUG: [UserID: %s] Markdown brut reçu de Groq pour videoID %s:\n---\n%s\n---\n", userID, videoID, markdownResult)
-
-	// 5. Parser la réponse Markdown en utilisant l'utilitaire
-	log.Printf("INFO: [UserID: %s] Parsing de la réponse Groq pour videoID: %s", userID, videoID)
-	parsedInsightData := utils.ParseInsightResponse(markdownResult) // Utilise la fonction de parsing existante
-	// Décommenter pour déboguer la structure parsée
-	// log.Printf("DEBUG: [UserID: %s] Insight parsé pour videoID %s: %+v", userID, videoID, parsedInsightData)
-
-	// 6. Mapper ParsedInsight vers models.Insight et Marshal les champs JSON
-	log.Printf("INFO: [UserID: %s] Mapping vers le modèle Insight pour videoID: %s", userID, videoID)
-	newInsight := &models.Insight{
-		UserID:    userID, // Utilisation de l'userID fourni
-		VideoID:   videoID,
-		Sentiment: parsedInsightData.Sentiment,
-		Summary:   parsedInsightData.Summary,
-		// ID et CreatedAt sont gérés automatiquement par GORM/DB
-	}
-
-	// Fonction utilitaire interne pour marshaler en JSON ou retourner un JSON vide/null
-	marshalToJson := func(fieldName string, data interface{}) datatypes.JSON {
-		bytes, err := json.Marshal(data)
-		if err != nil {
-			// Log l'erreur mais ne bloque pas, retourne un JSON vide '[]' (ou 'null' si vous préférez)
-			log.Printf("WARN: [UserID: %s] Échec du marshalling JSON pour le champ '%s' (videoID: %s): %v. Utilisation de '[]'.", userID, fieldName, videoID, err)
-			// Vous pourriez vouloir retourner datatypes.JSON("null") selon la gestion en base/front
-			return datatypes.JSON("[]")
+	if err == nil {
+		log.Printf("INFO: [UserID: %s] Transcription brute récupérée. Génération du résumé...", userID)
+		// Tronquer AVANT de résumer si trop long pour l'input de SummarizeTranscript
+		// transcriptToSummarize := utils.TruncateTextByWords(rawTranscript, 15000) // Exemple
+		summary, summaryErr := s.groqAdapter.SummarizeTranscript(ctx, rawTranscript) // Utiliser rawTranscript (ou tronqué si besoin)
+		if summaryErr != nil {
+			log.Printf("WARN: [UserID: %s] Échec génération résumé transcript: %v", userID, summaryErr)
+			transcriptSummary = "Résumé non généré (erreur IA)."
+		} else {
+			transcriptSummary = summary
+			log.Printf("INFO: [UserID: %s] Résumé transcript généré.", userID)
 		}
-		return datatypes.JSON(bytes)
+
+		// Préparer le contexte (tronqué) pour l'analyse des commentaires
+		// maxWordsForCommentContext := 5000 // <-- AJUSTER cette valeur (très important !)
+		// transcriptForAnalysis = utils.TruncateTextByWords(rawTranscript, maxWordsForCommentContext)
+		// log.Printf("INFO: [UserID: %s] Transcription tronquée à %d mots pour contexte analyse commentaires.", userID, maxWordsForCommentContext)
+
+	} else {
+		log.Printf("WARN: [UserID: %s] Échec récupération transcription: %v. Analyse sans contexte transcript.", userID, err)
+		// transcriptSummary et transcriptForAnalysis gardent leurs valeurs par défaut
 	}
 
-	newInsight.TopComments = marshalToJson("TopComments", parsedInsightData.TopComments)
-	newInsight.NegativeComments = marshalToJson("NegativeComments", parsedInsightData.NegativeComments)
-	newInsight.QuestionComments = marshalToJson("QuestionComments", parsedInsightData.QuestionComments)
-	newInsight.FeedbackComments = marshalToJson("FeedbackComments", parsedInsightData.FeedbackComments)
-	newInsight.Keywords = marshalToJson("Keywords", parsedInsightData.Keywords)
 
-	// 7. Sauvegarder l'Insight en base de données via le repository Insight
-	log.Printf("INFO: [UserID: %s] Sauvegarde de l'insight en base pour videoID: %s", userID, videoID)
+	// --- Étape 3: Chunking et Analyse des Commentaires ---
+	chunkSize := 50 // <-- AJUSTER cette valeur (nombre de commentaires par appel Groq)
+	var allParsedInsights []*utils.ParsedInsight // Pour stocker les résultats de chaque chunk
+	totalChunks := (len(commentsData) + chunkSize - 1) / chunkSize
+
+	log.Printf("INFO: [UserID: %s] Début de l'analyse des commentaires par lots (taille: %d, total: %d) pour videoID: %s", userID, chunkSize, totalChunks, videoID)
+
+	for i := 0; i < len(commentsData); i += chunkSize {
+		end := i + chunkSize
+		if end > len(commentsData) {
+			end = len(commentsData)
+		}
+		commentChunk := commentsData[i:end] // Le lot actuel de commentaires
+		currentChunkNum := (i / chunkSize) + 1
+
+		// Formatage des commentaires pour CE lot
+		var chunkContents []string
+		for _, c := range commentChunk {
+			chunkContents = append(chunkContents, fmt.Sprintf(
+				"Auteur: %s | Date: %s | Commentaire: \"%s\"",
+				c.Author, c.Date.Format("2006-01-02"), c.Content,
+			))
+		}
+
+		log.Printf("INFO: [UserID: %s] Analyse du lot %d/%d (taille %d)...", userID, currentChunkNum, totalChunks, len(chunkContents))
+
+		// Appel à Groq pour CE LOT avec le contexte transcript (tronqué)
+		markdownChunkResult, err := s.groqAdapter.AnalyzeComments(ctx, chunkContents, rawTranscript)
+		if err != nil {
+			// Que faire si un lot échoue ? Logguer et continuer ? Ou échouer tout ?
+			// Pour l'instant, on loggue et on continue au lot suivant.
+			log.Printf("WARN: [UserID: %s] Échec analyse du lot %d/%d pour videoID %s: %v. Lot ignoré.", userID, currentChunkNum, totalChunks, videoID, err)
+			continue // Passe au lot suivant
+		}
+
+		// Parser le résultat Markdown du lot
+		parsedChunk := utils.ParseInsightResponse(markdownChunkResult)
+		if parsedChunk != nil { // Vérifier si le parsing a réussi
+			allParsedInsights = append(allParsedInsights, parsedChunk)
+			log.Printf("INFO: [UserID: %s] Lot %d/%d analysé et parsé avec succès.", userID, currentChunkNum, totalChunks)
+		} else {
+			log.Printf("WARN: [UserID: %s] Échec parsing du résultat du lot %d/%d pour videoID %s. Lot ignoré.", userID, currentChunkNum, totalChunks, videoID)
+		}
+
+		// Optionnel: Pause pour éviter de surcharger les limites TPM trop rapidement
+        if totalChunks > 1 && currentChunkNum < totalChunks { // Ne pas attendre après le dernier chunk
+		    time.Sleep(500 * time.Millisecond) // Attente de 500ms (configurable !)
+        }
+	} // Fin de la boucle des chunks
+
+
+	// --- Étape 4: Fusion des Résultats Parsés ---
+	if len(allParsedInsights) == 0 {
+		// Aucun lot n'a réussi
+		log.Printf("ERROR: [UserID: %s] Aucun lot de commentaires n'a pu être analysé avec succès pour videoID %s.", userID, videoID)
+		return nil, fmt.Errorf("échec de l'analyse d'au moins un lot de commentaires")
+	}
+
+	log.Printf("INFO: [UserID: %s] Fusion des résultats de %d lots analysés pour videoID: %s", userID, len(allParsedInsights), videoID)
+	finalParsedInsight := utils.MergeParsedInsights(allParsedInsights) // Appel de la fonction de fusion (à définir ci-dessous)
+
+
+	// --- Étape 5: Mapping vers models.Insight (utilise finalParsedInsight) ---
+	log.Printf("INFO: [UserID: %s] Mapping final vers le modèle Insight pour videoID: %s", userID, videoID)
+	newInsight := &models.Insight{
+		UserID:            userID,
+		VideoID:           videoID,
+		Sentiment:         finalParsedInsight.Sentiment, // Sentiment issu de la fusion
+		Summary:           finalParsedInsight.Summary,   // Résumé issu de la fusion
+		TranscriptSummary: transcriptSummary,          // Résumé de la transcription (fait séparément)
+	}
+	marshalToJson := func(fieldName string, data interface{}) datatypes.JSON { /* ... (helper identique) ... */
+        bytes, err := json.Marshal(data)
+        if err != nil { log.Printf("gvgv"); return datatypes.JSON("[]") }
+        return datatypes.JSON(bytes)
+    }
+	newInsight.TopComments = marshalToJson("TopComments", finalParsedInsight.TopComments)
+	newInsight.NegativeComments = marshalToJson("NegativeComments", finalParsedInsight.NegativeComments)
+	newInsight.QuestionComments = marshalToJson("QuestionComments", finalParsedInsight.QuestionComments)
+	newInsight.FeedbackComments = marshalToJson("FeedbackComments", finalParsedInsight.FeedbackComments)
+	newInsight.Keywords = marshalToJson("Keywords", finalParsedInsight.Keywords)
+
+
+	// --- Étape 6: Sauvegarde en base ---
+	log.Printf("INFO: [UserID: %s] Sauvegarde de l'insight fusionné en base pour videoID: %s", userID, videoID)
 	err = s.insightRepo.CreateInsight(ctx, newInsight)
-	if err != nil {
-		// Erreur lors de la sauvegarde en base
-		// TODO: Gérer les erreurs spécifiques, ex: violation de contrainte unique si l'insight existe déjà
-		return nil, fmt.Errorf("échec de la sauvegarde de l'insight en base pour videoID %s: %w", videoID, err)
-	}
+	if err != nil { return nil, fmt.Errorf("échec sauvegarde insight fusionné en base: %w", err) }
 
-	log.Printf("INFO: [UserID: %s] Insight sauvegardé avec succès pour videoID %s. Nouvel ID: %s", userID, videoID, newInsight.ID)
 
-	// 8. Retourner l'insight qui vient d'être créé (avec son ID et CreatedAt remplis par GORM)
+	// --- Étape 7: Retourner l'insight ---
+	log.Printf("INFO: [UserID: %s] Insight fusionné sauvegardé avec succès pour videoID %s. ID: %s", userID, videoID, newInsight.ID)
 	return newInsight, nil
 }

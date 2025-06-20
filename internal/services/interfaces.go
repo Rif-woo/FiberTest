@@ -14,6 +14,7 @@ type YouTubeAdapter interface {
 // GroqAdapter defines the contract for interacting with the Groq API.
 type GroqAdapter interface {
 	AnalyzeComments(ctx context.Context, comments []string, videoTranscript string) (string, error)
+		SummarizeTranscript(ctx context.Context, transcript string) (string, error)
 }
 
 // TranscriptUtil defines the contract for fetching video transcripts.

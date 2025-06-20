@@ -18,5 +18,6 @@ type Insight struct {
 	QuestionComments  datatypes.JSON // []string
 	FeedbackComments  datatypes.JSON // []string ou autres remarques
 	Keywords          datatypes.JSON // []string
+	TranscriptSummary string
 	CreatedAt         time.Time
 }

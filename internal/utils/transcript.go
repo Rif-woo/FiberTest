@@ -61,7 +61,7 @@ func (tu *transcriptUtil) GetTranscript(ctx context.Context, videoID string) (st
 	}
 
 	// Tronquer la transcription avant de la retourner
-	truncatedTranscript := TruncateTextByWords(transcript, 1000) // Utilise la fonction utilitaire
+	truncatedTranscript := TruncateTextByWords(transcript, 50) // Utilise la fonction utilitaire
 
 	return truncatedTranscript, nil
 }

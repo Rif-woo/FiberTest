@@ -19,7 +19,7 @@ func InitDB() {
 		log.Fatal("Erreur lors du chargement du fichier .env")
 	}
 
-	dsn := os.Getenv("DB_URL_RAILWAY")
+	dsn := os.Getenv("DB_URL_NEON")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Erreur de connexion à la base de données :", err)
@@ -36,10 +36,10 @@ func InitDB() {
 	db.Exec(`CREATE TYPE Notification_Type AS ENUM ('analysis', 'payment', 'alert')`)
 
 // Supprimer la table 'users' si elle existe déjà
-if err := db.Migrator().DropTable(&models.User{}); err != nil {
-	log.Fatal("Erreur lors de la suppression de la table 'users':", err)
-}
-fmt.Println("🗑️ Table 'users' supprimée avec succès")
+// if err := db.Migrator().DropTable(&models.User{}); err != nil {
+// 	log.Fatal("Erreur lors de la suppression de la table 'users':", err)
+// }
+// fmt.Println("🗑️ Table 'users' supprimée avec succès")
 
 // Auto-migrer les modèles, ce qui recréera la table 'users' avec le nouveau schéma
 if err := db.AutoMigrate(&models.User{}, &models.Subscription{}, &models.Comment{}, &models.Insight{}, &models.Notification{}); err != nil {
